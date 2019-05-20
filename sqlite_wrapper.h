@@ -4,10 +4,15 @@
 #include <exception>
 #include <string>
 #include <queue>
-#include <map>
 #include <vector>
 #include <memory>
 
+#include "result.h"
+
+using ParamVector = const std::vector<std::string>;
+using ParamString = const std::string;
+
+//Exceptions
 class Sqlite3Exception : public std::exception
 {
     std::string _msg;
@@ -38,34 +43,28 @@ public:
                     const std::string &columnName, const std::string &msg);
     virtual const char *what() const noexcept;
 };
-class InsertException : std::exception
-{
-    std::string _msg;
-public:
-    InsertException(const std::string &databaseName, const std::string &tableName, const std::string &msg);
-    virtual const char *what() const noexcept;
-};
-class SelectException : public std::exception
-{
-    std::string _msg;
-public:
-    SelectException(const std::string &databaseName, const std::string &tableName, const std::string &msg);
-    virtual const char *what() const noexcept;
-};
+//END_Exceptions
 
 
-struct resultColumn
-{
-    std::string name;
-    std::vector<std::string> values;
-};
-using Query = std::vector<resultColumn>;
-using ParamVector = const std::vector<std::string>;
-using ParamString = const std::string;
+//struct resultColumn
+//{
+//    std::string name;
+//    std::vector<std::string> values;
+//};
+//using _Result = std::vector<resultColumn>;
 
 
 class Sqlite_wrapper
 {
+    Sqlite_wrapper();
+    Sqlite_wrapper(const Sqlite_wrapper &other) = delete;
+    Sqlite_wrapper(const Sqlite_wrapper &&other) = delete;
+    Sqlite_wrapper& operator=(const Sqlite_wrapper &other) = delete;
+    Sqlite_wrapper& operator=(const Sqlite_wrapper &&other) = delete;
+    sqlite3 *db;
+    char *sqlite3Errmsg;
+    static bool firstQuery;
+    static int callback(void*, int argc, char **argv, char **azColName);
     struct Column
     {
         std::string name;
@@ -86,10 +85,9 @@ class Sqlite_wrapper
         std::string getQuery();
         void clear();
     };
-
     struct Table
     {
-        std::shared_ptr<std::string> databaseName;
+        std::string databaseName;
         std::string name;
         std::queue<Column> columns;
         bool pKisSet;
@@ -99,25 +97,15 @@ class Sqlite_wrapper
         std::string getQuery();
         void clear();
     };
-
-    using Query = std::vector<resultColumn>;
-    std::shared_ptr<std::string> name;
-    static Query _result;
-    Query result;
-    std::string _query;
-    static bool firstQuery;
-    static int callback(void*, int argc, char **argv, char **azColName);
-    char *sqlite3Errmsg;
-    Sqlite_wrapper();
-    Sqlite_wrapper(const Sqlite_wrapper &other) = delete;
-    Sqlite_wrapper(const Sqlite_wrapper &&other) = delete;
-    Sqlite_wrapper& operator=(const Sqlite_wrapper &other) = delete;
-    Sqlite_wrapper& operator=(const Sqlite_wrapper &&other) = delete;
-    sqlite3 *db;
     Column curColumn;
     bool currentColumn;
     Table curTable;
     bool currentTable;
+
+    static Result _result;
+    Result result;
+
+
     void _modifyingExec(ParamString &query);
     void _readExec(ParamString &query);
     void _createDatabase(ParamString &fileName);
@@ -132,16 +120,7 @@ class Sqlite_wrapper
     void _setForeinKey(ParamString &column, ParamString &refTable, ParamString &refColumn);
     void _addTable();
     void _dropTable(ParamString &table);//TODO
-    void _insertInto(ParamString &table, ParamVector &columns, ParamVector &value);
-    void _where(ParamVector &columnToCheck, ParamVector &compareOperator, ParamVector &value, ParamString &operand);
-    void _like(ParamVector &columnToCheck, ParamVector &like, ParamString &operand);
-    void _glob(ParamVector &columnToCheck, ParamVector &glob, ParamString &operand);
-    void _innerJoin(ParamString &table, ParamVector &columnToCheck, ParamVector &compareOperator, ParamVector &value, ParamString &operand);
-    void _outerJoin(ParamString &table, ParamVector &columnToCheck, ParamVector &compareOperator, ParamVector &value, ParamString &operand);
     void _getID(ParamString &IDName, ParamString &table, ParamString &columnName, ParamString &value);
-    void _updateTable(ParamString &table, ParamVector &columns, ParamVector &values, ParamString &where);
-    void _deleteRowFromTable(ParamString &table, ParamString &ID, ParamString &value);
-    void _clearTable(ParamString &table);
     void _disconnectFromDatabase();
 
 protected:
@@ -161,7 +140,6 @@ protected:
     virtual void updateExceptionHandler(std::exception &e);
 public:
     static Sqlite_wrapper *connectToDatabase(ParamString &fileName);
-
     void createTable(ParamString &table);
     void createColumn(ParamString &column, ParamString &type);
     void setAsPK();
@@ -172,30 +150,15 @@ public:
     void setForeinKey(ParamString &column, ParamString &refTable, ParamString &refColumn = "");
     void addTable();
     void dropTable(ParamString &table);//TODO
-    void insertInto(ParamString &table, ParamVector &columns, ParamVector &values);
-    static void printToShell(const Query &result);
-    void selectFrom(ParamString table, ParamVector &columns);
-    void where(ParamVector &columnToCheck, ParamVector &compareOperator, ParamVector &value, ParamString &operand = ""/*and/or*/);
-    void like(ParamVector &columnToCheck, ParamVector &like, ParamString &operand = ""/*and/or*/);
-    void glob(ParamVector &columnToCheck, ParamVector &glob, ParamString &operand = ""/*and/or*/);
-    void groupBy(ParamVector &columns);
-    void orderBy(ParamVector &orderByColumn, ParamString &order = "asc");
-    void limit(int limit);
-    void crossJoin(ParamString &table);
-    void innerJoin(ParamString &table, ParamVector &columnToCheck, ParamVector &compareOperator, ParamVector &value, ParamString &operand = ""/*and/or*/);
-    void outerJoin(ParamString &table, ParamVector &columnToCheck, ParamVector &compareOperator, ParamVector &value, ParamString &operand = ""/*and/or*/);
+    static void printToShell(const Result &result);
+
     std::string getID(ParamString &table, ParamString &columnName, ParamString &value, ParamString &IDName = "");
     void modifyingExec(ParamString &query);
-    Query &readExec(ParamString &query);
-    Query &execSelect();
-    Query &getLastResult();
+    Result &readExec(ParamString &query);
+    Result &getLastResult();
     //If IDName is not provided the IDName will be automatically set to table name with ID ending.
     //E.g. If table name is Test then IDName will be set to TestID
-    void updateTable(ParamString &table, ParamVector &columns, ParamVector &values, ParamString &where);
-    void deleteRowFromTable(ParamString &table, ParamString &ID, ParamString &value);
-    void clearTable(ParamString &table);
     void disconnectFromDatabase();
-
     virtual ~Sqlite_wrapper();
 };
 
